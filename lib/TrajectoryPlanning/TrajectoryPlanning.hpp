@@ -1,4 +1,6 @@
 #include <stdint.h>
+#include <array>
+#include <cmath>
 
 class TrajectoryBlock {
 public:
@@ -16,7 +18,7 @@ public:
     inline bool is_empty() {
         return cnts == 0;
     }
-    
+
     TrajectoryBlock& operator=(const TrajectoryBlock& other) {
         k = other.k;
         cnts = other.cnts;
@@ -46,6 +48,19 @@ public:
     };
 
     TrajectoryBlock calculate_next_block();
+
+
+    static constexpr std::array<uint16_t, 256> calculate_cycleupdate_steps(float f_timer, float m, float a_set) {
+        std::array<uint16_t, 256> ret{};
+
+        for (int i=255; i>2; i--) {
+            ret[i] = static_cast<uint16_t>(
+                std::roundf(m * f_timer * f_timer / a_set * (1.0f/(i-1) - 1.0f/i))
+            );
+        }
+
+        return ret;
+    }
 
 private:
     const uint16_t p_set = 0;

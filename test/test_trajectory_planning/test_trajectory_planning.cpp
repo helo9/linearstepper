@@ -19,7 +19,7 @@ void test_planning(void) {
     static constexpr uint16_t position_error = 15;
     static constexpr uint16_t velocity_setpoint = 10;
     static constexpr uint16_t acceleration_setpoint = 30;
-    
+
 
     TrajectoryPlanner planner = TrajectoryPlanner(
         position_error,
@@ -41,15 +41,26 @@ void test_planning(void) {
         0,
         [&](int acc, TrajectoryBlock &elem){
             return acc + elem.cnts;
-        }    
+        }
     );
 
     // TODO: improve accuracy
     TEST_ASSERT_INT_WITHIN_MESSAGE(1000, 180827, overall_cnts, "Way off in overall steps :(");
 }
 
+void test_calculate_cycleupdate_steps(void) {
+
+    static constexpr auto arr = TrajectoryPlanner::calculate_cycleupdate_steps(16e6 / 256, 3.0 / 1600, 30);
+
+    TEST_ASSERT_EQUAL(4, arr[255]);
+    TEST_ASSERT_EQUAL(6, arr[200]);
+    TEST_ASSERT_EQUAL(11, arr[150]);
+    TEST_ASSERT_EQUAL(19, arr[113]);
+}
+
 int main( int argc, char **argv) {
     UNITY_BEGIN();
     RUN_TEST(test_planning);
+    RUN_TEST(test_calculate_cycleupdate_steps);
     UNITY_END();
 }
