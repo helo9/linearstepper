@@ -1,0 +1,7 @@
+= linstep
+
+image::sim/modeling.svg[]
+
+linstep is the attempt to develop an Arduino Firmware, which allows users to command a stepper motor driven linear actuator by phone or computer.
+You might wonder, why I didn't use grbl or something similar.
+The answer is, I didn't want to :)
