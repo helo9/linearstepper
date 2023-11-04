@@ -1,12 +1,12 @@
 #include <stdint.h>
-#include <array>
-#include <cmath>
+//#include <array>
+//#include <cmath>
 
 class TrajectoryBlock {
 public:
     TrajectoryBlock() = default;
 
-    TrajectoryBlock (uint8_t k, uint8_t cnts)
+    constexpr TrajectoryBlock (uint8_t k, uint8_t cnts)
         :k(k), cnts(cnts) {};
 
     TrajectoryBlock (const TrajectoryBlock &other)
@@ -50,7 +50,7 @@ public:
     TrajectoryBlock calculate_next_block();
 
 
-    static constexpr std::array<uint16_t, 256> calculate_cycleupdate_steps(float f_timer, float m, float a_set) {
+    /*static constexpr std::array<uint16_t, 256> calculate_cycleupdate_steps(float f_timer, float m, float a_set) {
         std::array<uint16_t, 256> ret{};
 
         for (int i=255; i>2; i--) {
@@ -60,7 +60,7 @@ public:
         }
 
         return ret;
-    }
+    }*/
 
 private:
     const uint16_t p_set = 0;
