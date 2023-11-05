@@ -1,15 +1,8 @@
 #include "TrajectoryPlanning.hpp"
 #include "stdio.h"
 
-static constexpr auto initial_k = 256U;
-
-static constexpr auto prescaler = 8U;
-
-static constexpr uint16_t a_set = 30;
-
-static constexpr float f_clk = 16000000.0f / prescaler;
-
-static constexpr float m = 3.0f / (8.0f * 4500.0f);
+namespace Trajectory
+{
 
 constexpr uint32_t as_u32(float value) {
     return static_cast<uint32_t>(value);
@@ -21,147 +14,106 @@ constexpr uint16_t as_u16(float value) {
 
 static_assert(as_u32(166.66666) == 166);
 
-static inline uint16_t calculate_initial_time_ms(uint16_t a_set) {
-    return as_u32(1000 * f_clk * m) / ( a_set * initial_k);
-}
+constexpr uint16_t Planner::precalculated_cycleupdate_steps[];
 
-enum class TrajectoryPhase{
-    init,
-    acceleration,
-    stationary,
-    decelleration
-};
+Block Planner::calculate_next_block()  {
 
-TrajectoryPlanner::TrajectoryPlanner(uint16_t position_error, uint16_t set_velocity, uint16_t set_acceleration)
-    :p_set(position_error), v_set(set_velocity),  t_0(calculate_initial_time_ms(set_acceleration))
-{
-    state = State::acceleration;
+    printf("calculate_next_block %d\n(k_set: %d)\n", state, k_set);
 
-    // TODO adapt v_set if triangular..
-}
-
-static constexpr uint16_t calculate_acceleration_k(uint16_t t_0, uint32_t k_sum) {
-    return 55555L / (217L + 10L * k_sum / 2000L);
-}
-
-static_assert(calculate_acceleration_k(21, 256) == 254);
-
-static uint16_t calculate_v(uint16_t k) {
-    return as_u16(f_clk * m) / k;
-}
-
-static uint16_t calculate_p(uint32_t cnts) {
-    return cnts * as_u32(1e6 * m) / 1000000;
-}
-
-static constexpr uint16_t calculate_deacceleration_k(uint16_t v_set, uint32_t k_sum_deacceleration) {
-    return as_u16(100 * f_clk * m) / (as_u32(100 * v_set) - a_set * as_u32(1e7/ f_clk) * k_sum_deacceleration / as_u32(1e5));
-}
-
-static_assert(calculate_deacceleration_k(10, 256) == 16);
-static_assert(calculate_deacceleration_k(10, 0) == 16);
-
-
-TrajectoryBlock TrajectoryPlanner::calculate_next_block()  {
-
-    printf("calculate_next_block %d\n", state);
-    
-    uint16_t k = 0;
-    uint16_t cnt = 0;
+    Block blk (k, 0);
 
     if (state == State::acceleration) {
 
-        k = calculate_acceleration_k(t_0, k_sum);
+        if (k > k_set) {
+            while (blk.k == k && position.get_upper_cnt() < p_set && blk.cnts < 255) {
+                if (dk > k) {
+                    dk -= k;
+                } else {
+                    uint8_t r = k - dk;
+                    k--;
 
-        while (cnt < 255 && calculate_v(k) < v_set && calculate_p(cnt_sum+cnt) < (p_set / 2)) {
-            cnt++;
-            k_sum += k;
-            
-            // next iterations k
-            if(calculate_acceleration_k(t_0, k_sum) != k) {
-                // next block..
-                break;
+                    while (r > precalculated_cycleupdate_steps[k]) {
+                        r -= precalculated_cycleupdate_steps[k];
+                        k--;
+                    }
+
+                    dk = precalculated_cycleupdate_steps[k] - r;
+                }
+
+                blk.cnts++;
+                position.lower_increment();
             }
         }
 
-        if (calculate_v(k) >= v_set) {
-            printf("Entering Steady\n");
-
+        if (blk.k == k_set) {
+            steady_end_position = Position(p_set, 0) - position;
+            k = k_set;
             state = State::steady_state;
 
-            p_entering_steady = calculate_p(cnt_sum);
-
-        } else if (calculate_p(cnt_sum) >= (p_set / 2)) {
-            printf("Entering Deacceleration (p: %d >= p_set: %d, k_sum was %d)\n", calculate_p(cnt_sum), p_set, cnt_sum);
-
-            state = State::deceleration;
-
-            k_sum_entering_deacceleration = k_sum;
+            printf("Going into steady with k=%d, steady_end %d.%d (pos: %d.%d)\n",
+                k,
+                steady_end_position.get_upper_cnt(), steady_end_position.get_lower_cnt(),
+                position.get_upper_cnt(), position.get_lower_cnt()
+            );
         }
     }
 
     // Steady State
 
     if (state == State::steady_state) {
-        
-        static constexpr uint32_t p_blockmaxx100 = as_u32(100 * 255 * m);
-        const uint32_t p_leftx100 = 100 *(p_set - p_entering_steady - calculate_p(cnt_sum));
-        k = as_u16(100 * f_clk * m) / v_set / 100;
-        
 
-        if (p_leftx100 <= 0) {
-            cnt = 0;
-        } else if (p_leftx100 > p_blockmaxx100) {
-            cnt = 255;
-        }  else {
-            cnt = 255 * p_leftx100 / p_blockmaxx100;
+        while (blk.k == k_set && blk.cnts < 255 && position < steady_end_position) {
+            blk.cnts++;
+            position.lower_increment();
         }
 
-        k_sum += k * cnt;
-
-        if (p_leftx100 <= 0) {
-            printf("Entering Deacceleration\n");
+        if (position >= steady_end_position) {
+            printf("going further ..deacceleration, %d.%d\n", position.get_upper_cnt(), position.get_lower_cnt());
+            dk = r+1; // TODO: get rid of this number
             state = State::deceleration;
-            k_sum_entering_deacceleration = k_sum;
         }
+
     }
 
     // Deacceleration
 
     if (state == State::deceleration) {
+        if (k < 255) {
+            while (blk.k == k && position <= Position(p_set, 0) && blk.cnts < 255) {
+                if (dk > k) {
+                    dk -= k;
+                } else {
+                    r = k - dk;
+                    k++;
 
-        printf("Deacceleration\n");
+                    while (r > precalculated_cycleupdate_steps[k]) {
+                        r -= precalculated_cycleupdate_steps[k];
+                        k++;
+                    }
 
-        k = calculate_deacceleration_k(v_set, k_sum - k_sum_entering_deacceleration);
+                    dk = precalculated_cycleupdate_steps[k] - r;
+                }
 
-        printf("%d %d\n", v_set, k);
+                printf("deacceleration %d, %d\n", k, dk);
 
-        while (cnt < 255 && calculate_p(cnt_sum+cnt) < p_set) {
-            cnt++;
-            k_sum += k;
+                blk.cnts++;
+                position.lower_increment();
+            }
         }
 
-        printf("Deacceleration round over\n");
+        if (position >= Position(p_set, 0)) {
 
-        if (calculate_p(cnt_sum) >= p_set) {
-            printf("Leaving Deacceleration\n");
-
-            state = State::deceleration;
-
-            k_sum_entering_deacceleration = k_sum;
-
+            printf("State::done :)");
             state = State::done;
+
+            k = 0;
         }
-
-        
     }
 
-    if (state == State::done) {
-        return TrajectoryBlock::empty_block();
-    } else {
-        cnt_sum += cnt;
-        printf("block: %d, %d\n", k, cnt);
-        return TrajectoryBlock(k, cnt);
-    }
-    
+
+    printf("block: %d, %d (k_new=%d, dk=%d)\n", blk.k, blk.cnts, k, dk);
+    return blk;
+
+}
+
 }
