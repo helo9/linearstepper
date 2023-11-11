@@ -14,6 +14,7 @@ void setup(){
 
     // Enable status pin / Active during caculation
     DDRD |= (1<<PD7) | (1<<PD6);
+    PORTD = 0x00;
 
     // Configure Timer 2
     {
@@ -41,31 +42,34 @@ void setup(){
     Serial.print('\n');
 }
 
-static int i = 1;
-
 void loop() {
-    auto planner = Planner(5*i++, 10);
+    auto planner = Planner(30, 15);
 
     PORTB ^= (1<<PB5);
-    PORTD &= ~(1<<PD6);
+    PORTD |= (1<<PD6);
 
     for (int i=0; i<2800; i++) {
-        if (i < 512) {
+        if (i < 512 && planner.is_done() == false) {
             movement_plan[i] = planner.calculate_next_block();
+            Serial.print(movement_plan[i].k);
+            Serial.print(' ');
+            Serial.print(movement_plan[i].cnts);
+            Serial.print(' ');
+            Serial.print(i);
+            Serial.print('\n');
         } else {
             planner.calculate_next_block();
         }
     }
 
-    if (i==3)
-        i=1;
-
+    Serial.print("Starting over..");
     movement_index = 0;
     movement_ready = false;
 
     Serial.print('g');
     Serial.print('\n');
 
+    PORTD &= ~(1<<PD6);
     //PORTD |= (1<<PD6);
 
     PORTB |= (1<<PB5);
@@ -88,7 +92,7 @@ ISR(TIMER2_COMPA_vect){  // Interrupt Service Routine
     }
 
     PORTD |= (1<<PD7);
-    TCNT1 = 0xFF00;
+    TCNT1 = 0xFF80;
     TCCR1B = (1<<CS11);
 
     if (movement_plan[movement_index].cnts==0) {
