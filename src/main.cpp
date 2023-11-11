@@ -6,6 +6,19 @@ using namespace Trajectory;
 static volatile Block movement_plan[256] = {};
 volatile static uint16_t movement_index = 0;
 volatile static bool movement_ready = false;
+volatile static bool is_moving = false;
+
+String inputString = "";      // a String to hold incoming data
+bool stringComplete = false;  // whether the string is complete
+
+void plan_movement();
+
+enum class State {
+    IDLE,
+    MOVING,
+};
+
+State main_state = State::IDLE;
 
 void setup(){
 
@@ -40,13 +53,71 @@ void setup(){
 
     Serial.print(roundf(m * f_timer / 15));
     Serial.print('\n');
+
+    inputString.reserve(200);
 }
 
 void loop() {
-    auto planner = Planner(30, 15);
 
-    PORTB ^= (1<<PB5);
-    PORTD |= (1<<PD6);
+    switch (main_state) {
+        case State::IDLE: {
+            if (!stringComplete) {
+                // nothing todo
+                return;
+            }
+
+            stringComplete = false;
+
+            Serial.print("Got String\n");
+
+            if(inputString.startsWith("g") == false) {
+                inputString = "";
+                return;
+            }
+
+            // TODO: parse
+            inputString = "";
+
+            Serial.print("String started with g\n");
+
+            PORTB |= (1<<PB5);
+            PORTD |= (1<<PD6);
+
+            plan_movement();
+
+            PORTD &= ~(1<<PD6);
+            PORTB ^= (1<<PB5);
+
+            Serial.print("Starting over..");
+
+            main_state = State::MOVING;
+
+            break;
+        }
+        case State::MOVING: {
+
+            movement_index = 0;
+            movement_ready = false;
+
+            // prescaler = 256
+            TCCR2B = (1<<CS22) | (1<<CS21);
+            PORTB &= ~(1<<PB5);
+
+            while(movement_ready == false) {
+                _NOP();
+            }
+
+            main_state = State::IDLE;
+
+            break;
+        }
+
+    }
+}
+
+void plan_movement() {
+
+    auto planner = Planner(20, 15);
 
     for (int i=0; i<2800; i++) {
         if (i < 512 && planner.is_done() == false) {
@@ -58,31 +129,29 @@ void loop() {
             Serial.print(i);
             Serial.print('\n');
         } else {
+            Serial.print(i);
+            Serial.print('\n');
             planner.calculate_next_block();
+            break;
         }
     }
 
-    Serial.print("Starting over..");
-    movement_index = 0;
-    movement_ready = false;
+}
 
-    Serial.print('g');
-    Serial.print('\n');
-
-    PORTD &= ~(1<<PD6);
-    //PORTD |= (1<<PD6);
-
-    PORTB |= (1<<PB5);
-
-    // prescaler = 256
-    TCCR2B = (1<<CS22) | (1<<CS21);
-
-    while(movement_ready == false) {
-        _NOP();
+void serialEvent() {
+  while (Serial.available()) {
+    // get the new byte:
+    char inChar = (char)Serial.read();
+    Serial.print(inChar);
+    // add it to the inputString:
+    inputString += inChar;
+    // if the incoming character is a newline, set a flag so the main loop can
+    // do something about it:
+    if (inChar == 'g') {
+      stringComplete = true;
+      Serial.print("Got \\n\n");
     }
-
-    PORTB &= ~(1<<PB5);
-
+  }
 }
 
 ISR(TIMER2_COMPA_vect){  // Interrupt Service Routine
