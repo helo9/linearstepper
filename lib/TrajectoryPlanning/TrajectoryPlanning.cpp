@@ -18,7 +18,7 @@ constexpr uint16_t Planner::precalculated_cycleupdate_steps[];
 
 Block Planner::calculate_next_block()  {
 
-    printf("calculate_next_block %d\n(k_set: %d)\n", state, k_set);
+    //printf("calculate_next_block %d\n(k_set: %d)\n", state, k_set);
 
     Block blk (k, 0);
 
@@ -50,11 +50,11 @@ Block Planner::calculate_next_block()  {
             k = k_set;
             state = State::steady_state;
 
-            printf("Going into steady with k=%d, steady_end %d.%d (pos: %d.%d)\n",
+            /*printf("Going into steady with k=%d, steady_end %d.%d (pos: %d.%d)\n",
                 k,
                 steady_end_position.get_upper_cnt(), steady_end_position.get_lower_cnt(),
                 position.get_upper_cnt(), position.get_lower_cnt()
-            );
+            );*/
         }
     }
 
@@ -68,7 +68,7 @@ Block Planner::calculate_next_block()  {
         }
 
         if (position >= steady_end_position) {
-            printf("going further ..deacceleration, %d.%d\n", position.get_upper_cnt(), position.get_lower_cnt());
+            //printf("going further ..deacceleration, %d.%d\n", position.get_upper_cnt(), position.get_lower_cnt());
             dk = r+1; // TODO: get rid of this number
             state = State::deceleration;
         }
@@ -94,7 +94,7 @@ Block Planner::calculate_next_block()  {
                     dk = precalculated_cycleupdate_steps[k] - r;
                 }
 
-                printf("deacceleration %d, %d\n", k, dk);
+                //printf("deacceleration %d, %d\n", k, dk);
 
                 blk.cnts++;
                 position.lower_increment();
@@ -103,7 +103,7 @@ Block Planner::calculate_next_block()  {
 
         if (position >= Position(p_set, 0)) {
 
-            printf("State::done :)");
+            //printf("State::done :)");
             state = State::done;
 
             k = 0;
@@ -111,7 +111,7 @@ Block Planner::calculate_next_block()  {
     }
 
 
-    printf("block: %d, %d (k_new=%d, dk=%d)\n", blk.k, blk.cnts, k, dk);
+    //printf("block: %d, %d (k_new=%d, dk=%d)\n", blk.k, blk.cnts, k, dk);
     return blk;
 
 }

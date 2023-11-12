@@ -6,7 +6,7 @@ namespace Trajectory {
 
 static constexpr auto prescaler = 256U;
 
-static constexpr uint16_t a_set = 45;
+static constexpr uint16_t a_set = 50;
 
 static constexpr float f_clk = 16e6f;
 

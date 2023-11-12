@@ -1,24 +1,26 @@
-#include "Arduino.h"
+#include <stdlib.h>
+#include <Arduino.h>
+#include "ardu_algorithm.hpp"
 #include "TrajectoryPlanning.hpp"
+#include "UartProtocol.hpp"
 
 using namespace Trajectory;
 
-static volatile Block movement_plan[256] = {};
+static constexpr size_t movement_plan_length = 256U;
+static volatile Block movement_plan[movement_plan_length] = {};
 volatile static uint16_t movement_index = 0;
 volatile static bool movement_ready = false;
-volatile static bool is_moving = false;
 
-String inputString = "";      // a String to hold incoming data
-bool stringComplete = false;  // whether the string is complete
+char input_str[25] = {};      // a String to hold incoming data
+uint8_t input_str_index = 0;
+bool input_str_complete = false;  // whether the string is complete
 
-void plan_movement();
+void plan_movement(uint8_t distance);
 
 enum class State {
     IDLE,
     MOVING,
 };
-
-State main_state = State::IDLE;
 
 void setup(){
 
@@ -26,7 +28,7 @@ void setup(){
     DDRB |= (1<<PB5);
 
     // Enable status pin / Active during caculation
-    DDRD |= (1<<PD7) | (1<<PD6);
+    DDRD |= (1<<PD7) | (1<<PD6) | (1<<PD5);
     PORTD = 0x00;
 
     // Configure Timer 2
@@ -51,50 +53,61 @@ void setup(){
 
     Serial.begin(19200);
 
-    Serial.print(roundf(m * f_timer / 15));
-    Serial.print('\n');
-
-    inputString.reserve(200);
+    Serial.print("Booted\n\r");
 }
 
 void loop() {
 
+    static State main_state = State::IDLE;
+
     switch (main_state) {
         case State::IDLE: {
-            if (!stringComplete) {
+            if (!input_str_complete) {
                 // nothing todo
                 return;
             }
 
-            stringComplete = false;
+            input_str_complete = false;
 
-            Serial.print("Got String\n");
+            const auto cmd_res = uart_protocol::parse_command(input_str, input_str_index+1);
 
-            if(inputString.startsWith("g") == false) {
-                inputString = "";
+            input_str_index = 0;
+
+            if (cmd_res.is_ok == false) {
                 return;
             }
 
-            // TODO: parse
-            inputString = "";
-
-            Serial.print("String started with g\n");
+            if (cmd_res.value().dir == uart_protocol::Direction::backwards) {
+                PORTD |= (1<<PD5);
+            } else {
+                PORTD &= ~(1<<PD5);
+            }
 
             PORTB |= (1<<PB5);
             PORTD |= (1<<PD6);
 
-            plan_movement();
+            const uint8_t distance = clamp(
+                cmd_res.value().length,
+                static_cast<uint8_t>(4U), // TODO: fix triangular movement planning to lower this
+                static_cast<uint8_t>(35U)
+            );
+
+            Serial.print("Starting movement planning...");
+
+            plan_movement(distance);
+
+            Serial.print("done\n");
 
             PORTD &= ~(1<<PD6);
             PORTB ^= (1<<PB5);
-
-            Serial.print("Starting over..");
 
             main_state = State::MOVING;
 
             break;
         }
         case State::MOVING: {
+
+            Serial.print("Moving..");
 
             movement_index = 0;
             movement_ready = false;
@@ -109,49 +122,53 @@ void loop() {
 
             main_state = State::IDLE;
 
+            Serial.print("done\n");
+
             break;
         }
 
     }
 }
 
-void plan_movement() {
+inline void plan_movement(uint8_t distance) {
 
-    auto planner = Planner(20, 15);
+    auto planner = Planner(distance, 15);
 
-    for (int i=0; i<2800; i++) {
-        if (i < 512 && planner.is_done() == false) {
-            movement_plan[i] = planner.calculate_next_block();
-            Serial.print(movement_plan[i].k);
-            Serial.print(' ');
-            Serial.print(movement_plan[i].cnts);
-            Serial.print(' ');
-            Serial.print(i);
-            Serial.print('\n');
-        } else {
-            Serial.print(i);
-            Serial.print('\n');
-            planner.calculate_next_block();
+    for (size_t i=0; i<movement_plan_length-1; i++) {
+        if (planner.is_done()) {
+            movement_plan[i] = Block(0, 0);
             break;
         }
+
+        movement_plan[i] = planner.calculate_next_block();
+
+        /*Serial.print(movement_plan[i].k);
+        Serial.print(' ');
+        Serial.print(' ');
+        Serial.print(movement_plan[i].cnts);
+        Serial.print(' ');
+        Serial.print(i);
+        Serial.print("\n\r");*/
     }
 
 }
 
 void serialEvent() {
-  while (Serial.available()) {
-    // get the new byte:
-    char inChar = (char)Serial.read();
-    Serial.print(inChar);
-    // add it to the inputString:
-    inputString += inChar;
-    // if the incoming character is a newline, set a flag so the main loop can
-    // do something about it:
-    if (inChar == 'g') {
-      stringComplete = true;
-      Serial.print("Got \\n\n");
+    while (Serial.available()) {
+        // get the new byte:
+        input_str[input_str_index] = (char)Serial.read();
+
+        Serial.print(input_str[input_str_index]);
+
+        // if the incoming character is a newline, set a flag so the main loop can
+        // do something about it:
+        if (input_str[input_str_index] == '\n' || input_str[input_str_index] == '\r') {
+            Serial.print("in complete\n\r");
+            input_str_complete = true;
+        }
+
+        input_str_index = (input_str_index + 1) % sizeof(input_str);
     }
-  }
 }
 
 ISR(TIMER2_COMPA_vect){  // Interrupt Service Routine
