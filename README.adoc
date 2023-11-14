@@ -5,3 +5,8 @@ image::sim/modeling.svg[]
 linstep is the attempt to develop an Arduino Firmware, which allows users to command a stepper motor driven linear actuator by phone or computer.
 You might wonder, why I didn't use grbl or something similar.
 The answer is, I didn't want to :)
+
+== Repository organization
+
+* A simulation of the chain from arduino to the camera is done in link:sim[].
+* The firmware for our Arduino Board can be found in link:firmware[].
