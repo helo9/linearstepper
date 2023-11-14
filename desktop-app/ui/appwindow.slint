@@ -1,0 +1,56 @@
+import {
+    ComboBox,
+    Slider,
+    SpinBox,
+    Button,
+    VerticalBox,
+    HorizontalBox,
+    GroupBox,
+    AboutSlint
+} from "std-widgets.slint";
+
+export component AppWindow inherits Window {
+    title: "linstep";
+    width: 200px;
+    height: 350px;
+    private property<int> distance: 3;
+    in property <[string]> available_serial_ports: ["-", "a"];
+    callback send_forwards_command(int);
+    callback send_backwards_command(int);
+    VerticalBox {
+        GroupBox{
+            title: "USB Schnittstelle";
+            ComboBox {
+                width: self.preferred-width;
+                height: self.preferred-height;
+                model: root.available_serial_ports;
+                current-value: "";
+            }
+        }
+        GroupBox{
+            title: "Schrittweite in mm";
+            SpinBox {
+                value: root.distance;
+                minimum: 3;
+                maximum: 35;
+                edited(a) => {
+                    root.distance = a;
+                }
+            }
+        }
+        HorizontalBox {
+            Button {
+                text: "<";
+                clicked() => {
+                    root.send_backwards_command(root.distance);
+                }
+            }
+            Button {
+                text: ">";
+                clicked() => {
+                    root.send_forwards_command(root.distance);
+                }
+            }
+        }
+    }
+}

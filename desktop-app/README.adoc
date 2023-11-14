@@ -1,0 +1,3 @@
+= linstep desktop app
+
+A desktop app build in rust using slint.
