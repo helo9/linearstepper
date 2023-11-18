@@ -17,6 +17,7 @@ export component AppWindow inherits Window {
     in property <[string]> available_serial_ports: ["-", "a"];
     callback send_forwards_command(int);
     callback send_backwards_command(int);
+    callback connect(string);
     VerticalBox {
         GroupBox{
             title: "USB Schnittstelle";
@@ -25,6 +26,9 @@ export component AppWindow inherits Window {
                 height: self.preferred-height;
                 model: root.available_serial_ports;
                 current-value: "";
+                selected(port_name) => {
+                    root.connect(port_name);
+                }
             }
         }
         GroupBox{
