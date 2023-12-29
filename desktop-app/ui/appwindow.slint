@@ -12,9 +12,9 @@ import {
 export component AppWindow inherits Window {
     title: "linstep";
     width: 200px;
-    height: 350px;
+    height: 300px;
     private property<int> distance: 3;
-    in property <[string]> available_serial_ports: ["-", "a"];
+    in property <[string]> available_serial_ports: ["-"];
     callback send_forwards_command(int);
     callback send_backwards_command(int);
     callback connect(string);
@@ -34,6 +34,7 @@ export component AppWindow inherits Window {
         GroupBox{
             title: "Schrittweite in mm";
             SpinBox {
+                enabled: true;
                 value: root.distance;
                 minimum: 3;
                 maximum: 35;
