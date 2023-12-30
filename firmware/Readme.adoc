@@ -1,0 +1,37 @@
+= linearstepper firmware
+
+This folder contains the firmware compatible with Arduino Uno Boards.
+
+== Dependencies
+
+There are two requirements
+
+* platformio for the firmware
+* a native toolchain for the host computer (optional, only for testing)
+
+== Pinout
+
+We use the following pins:
+
+* D7 as Pull
+* D6 as Debug Pin
+* D5 as Direction
+
+== Flashing the firmware
+
+When using a command line interface, use
+
+````
+pio run -t upload
+````
+
+to compile and upload the firmware.
+The Arduino board has to be connected.
+
+== Running the unit tests
+
+Use
+
+````
+pio test -env latest_stable
+````

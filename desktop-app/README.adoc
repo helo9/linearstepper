@@ -1,3 +1,18 @@
 = linstep desktop app
 
 A desktop app build in rust using slint.
+
+== Dependencies
+
+The following dependencies must be available
+
+* rust with cargo
+* libudev
+
+== Build
+
+Use
+
+````
+cargo build
+````
